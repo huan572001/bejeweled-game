@@ -6,7 +6,6 @@ export class Gem {
   value: number;
   element: HTMLElement;
   falling = false;
-  inStreak = false;
   isBomb = false; // thêm dòng này
   isLightGem: boolean = false;
   setBomb() {
@@ -21,11 +20,14 @@ export class Gem {
     }
   }
 
-  constructor(x: number, y: number, value: number) {
+  constructor(x: number, y: number, value: number, isLightGem?: boolean, isBomb?: boolean) {
     this.x = x;
     this.y = y;
     this.value = value;
-
+    if (isBomb) {
+      this.setBomb();
+    }
+    this.isLightGem = isLightGem || false;
     this.element = document.createElement('span');
     this.element.className = 'gem item';
     this.element.id = `tile${y}_${x}`;
@@ -97,3 +99,9 @@ export class Gem {
     }
   }
 }
+
+export type GemServer = {
+  value: number;
+  isBomb: boolean;
+  isLightGem: boolean;
+};

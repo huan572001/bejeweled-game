@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { GameEngine } from '@/lib/game/engine/GameEngine';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store';
-import { current } from '@reduxjs/toolkit';
 
 export default function GameBoard() {
   const engineRef = useRef<GameEngine>(null);

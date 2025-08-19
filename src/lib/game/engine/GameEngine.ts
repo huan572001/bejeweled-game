@@ -1,15 +1,15 @@
 import { GRID_SIZE, GEM_TYPES, INITIAL_SCORE_GOAL } from './GameConfig';
-import { Gem } from '../model/Gem';
+import { Gem, GemServer } from '../model/Gem';
 import { Score } from './Score';
 import { Timer } from './Timer';
 import { get } from '../utils/dom';
 const TEST_MAP: number[][] = [
-  [5, 2, 3, 4, 5, 6, 7, 1],
-  [6, 1, 3, 4, 5, 6, 7, 2],
+  [1, 2, 3, 4, 5, 6, 7, 1],
+  [1, 2, 3, 4, 5, 6, 7, 2],
   [2, 1, 5, 2, 3, 7, 1, 3],
   [1, 2, 1, 5, 5, 6, 7, 4],
-  [2, 1, 3, 2, 5, 6, 7, 5],
-  [1, 4, 1, 1, 4, 6, 2, 6],
+  [1, 2, 3, 2, 5, 6, 7, 5],
+  [2, 4, 1, 1, 4, 6, 2, 6],
   [7, 6, 5, 1, 3, 2, 7, 7],
   [7, 6, 5, 4, 3, 2, 1, 1],
 ];
@@ -34,21 +34,24 @@ export class GameEngine {
   }
 
   init() {
-    this.createGrid();
+    this.createGrid(true);
     // this.score.reset();
     this.timer.start();
     this.bindEvents();
   }
+
+  //ui
   setHoveredGem(gem: Gem) {
     if (this.activeDestroy) {
       this.hoveredGem = gem;
       this.uiTriggerSquareFromTopLeft(gem.x, gem.y, 4);
     }
   }
+  //ui
   createGrid(useTestMap = false) {
     const gridEl = get('#grid') as HTMLElement;
     this.grid = [];
-
+    const board = this.generateBoard(GRID_SIZE);
     for (let y = 0; y < GRID_SIZE; y++) {
       const row: Gem[] = [];
       for (let x = 0; x < GRID_SIZE; x++) {
@@ -57,14 +60,8 @@ export class GameEngine {
           // Lấy loại từ map test
           gem = new Gem(x, y, TEST_MAP[y][x]);
         } else {
-          // Sinh ngẫu nhiên nhưng tránh streak ban đầu
-          do {
-            gem = new Gem(x, y, Math.floor(Math.random() * GEM_TYPES));
-          } while (this.hasInitialStreak(gem, row, y));
+          gem = new Gem(x, y, board[y][x].value, board[y][x].isLightGem, board[y][x].isBomb);
         }
-        // do {
-        //   gem = new Gem(x, y, Math.floor(Math.random() * GEM_TYPES));
-        // } while (this.hasInitialStreak(gem, row, y));
         gem.pop(gridEl);
         row.push(gem);
       }
@@ -72,16 +69,24 @@ export class GameEngine {
     }
   }
 
-  private hasInitialStreak(gem: Gem, row: Gem[], y: number): boolean {
-    if (row.length >= 2 && row[row.length - 1].value === gem.value && row[row.length - 2].value === gem.value)
-      return true;
-    if (
-      y >= 2 &&
-      this.grid[y - 1][row.length]?.value === gem.value &&
-      this.grid[y - 2][row.length]?.value === gem.value
-    )
-      return true;
-    return false;
+  //BE
+  generateBoard(size: number) {
+    const board: GemServer[][] = [];
+
+    for (let y = 0; y < size; y++) {
+      board[y] = [];
+      for (let x = 0; x < size; x++) {
+        let value: number;
+        do {
+          value = Math.floor(Math.random() * 5) + 1;
+        } while (
+          (x >= 2 && board[y][x - 1].value === value && board[y][x - 2].value === value) ||
+          (y >= 2 && board[y - 1][x].value === value && board[y - 2][x].value === value)
+        );
+        board[y][x] = { value, isBomb: false, isLightGem: false };
+      }
+    }
+    return board;
   }
 
   bindEvents() {
@@ -92,6 +97,7 @@ export class GameEngine {
       if (gem) {
         if (this.activeDestroy) {
           this.triggerSquareFromTopLeft(gem, 4);
+          //ui
           this.setActiveDestroy(false);
         } else {
           this.handleGemClick(gem);
@@ -108,12 +114,6 @@ export class GameEngine {
     this.activeDestroy = value;
   }
   handleGemClick(gem: Gem) {
-    // if (gem.isBomb) {
-    //     this.triggerBomb(gem);
-    //     this.deselectGem();
-    //     return;
-    // }
-
     if (!this.selectedGem) {
       this.selectGem(gem);
       return;
@@ -134,25 +134,29 @@ export class GameEngine {
 
     // Bomb + Bomb => clear board
     if (g1.isBomb && g2.isBomb) {
-      this.handleBombAndBomb(g1, g2);
+      const result = this.handleBombAndBomb(g1, g2);
+      this.uiHandleRemoveGem(result);
       return;
     }
     // Bomb + Gem / Light Gem
     if (g1.isBomb || g2.isBomb) {
-      this.handleBombAndGem(g1, g2);
+      if (g1.isLightGem || g2.isLightGem) {
+        const result = this.handleBombAndLight(g1, g2);
+        this.uiHandleRemoveGem(result);
+      } else {
+        const result = this.handleBombAndGem(g1, g2);
+        this.uiHandleRemoveGem(result);
+      }
+
       return;
     }
     // Light Gem + Light Gem
     if (g1.isLightGem && g2.isLightGem) {
-      this.handleLightGemAndLightGem(g1, g2);
+      const result = this.handleLightGemAndLightGem(g1, g2);
+      this.uiHandleRemoveGem(result);
+      this.deselectGem(); //ui
       return;
     }
-
-    // // Light Gem + Normal Gem
-    // if (g1.isLightGem || g2.isLightGem) {
-    //   this.handleLightGemWithNormalGem(g1, g2);
-    //   return;
-    // }
 
     this.swapGems(g1, g2);
 
@@ -178,76 +182,37 @@ export class GameEngine {
 
     this.deselectGem();
   }
-  private handleBombAndGem(g1: Gem, g2: Gem) {
+  private handleBombAndLight(g1: Gem, g2: Gem) {
     // Bomb + Light Gem => clear 3 rows & 3 cols
-    if (g1.isLightGem || g2.isLightGem) {
-      this.swapGems(g1, g2);
-      const cx = g1.x;
-      const cy = g1.y;
-      const affected = new Set<Gem>();
+    this.swapGems(g1, g2);
+    const cx = g1.x;
+    const cy = g1.y;
+    const affected = new Set<Gem>();
 
-      for (let dx = -1; dx <= 1; dx++) {
-        const x = cx + dx;
-        if (x < 0 || x >= GRID_SIZE) continue;
-        for (let y = 0; y < GRID_SIZE; y++) {
-          affected.add(this.grid[y][x]);
-        }
+    for (let dx = -1; dx <= 1; dx++) {
+      const x = cx + dx;
+      if (x < 0 || x >= GRID_SIZE) continue;
+      for (let y = 0; y < GRID_SIZE; y++) {
+        affected.add(this.grid[y][x]);
       }
-
-      for (let dy = -1; dy <= 1; dy++) {
-        const y = cy + dy;
-        if (y < 0 || y >= GRID_SIZE) continue;
-        for (let x = 0; x < GRID_SIZE; x++) {
-          affected.add(this.grid[y][x]);
-        }
-      }
-
-      const gems = Array.from(affected);
-      const streakMap: Record<number, Gem[]> = {};
-      gems.forEach((g) => {
-        if (!streakMap[g.x]) streakMap[g.x] = [];
-        streakMap[g.x].push(g);
-      });
-
-      gems.forEach((gem, idx) => {
-        const isLast = idx === gems.length - 1;
-        gem.destroy(() => {
-          if (isLast) {
-            this.score.add(gems.length, this.comboReward, 0);
-            this.onStreakRemoved(streakMap);
-          }
-        });
-      });
-
-      this.deselectGem();
-      return;
     }
 
-    // Bomb + Gem => clear all gems with same value
-    const targetColor = g1.isBomb ? g2.value : g1.value;
-    const gems: Gem[] = [];
-    const streakMap: Record<number, Gem[]> = {};
-
-    for (let y = 0; y < GRID_SIZE; y++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      const y = cy + dy;
+      if (y < 0 || y >= GRID_SIZE) continue;
       for (let x = 0; x < GRID_SIZE; x++) {
-        const gem = this.grid[y][x];
-        if (gem.value === targetColor) {
-          gems.push(gem);
-          if (!streakMap[x]) streakMap[x] = [];
-          streakMap[x].push(gem);
-        }
+        affected.add(this.grid[y][x]);
       }
     }
-    if (!gems.includes(g1)) {
-      gems.push(g1);
-      if (!streakMap[g1.x]) streakMap[g1.x] = [];
-      streakMap[g1.x].push(g1);
-    }
-    if (!gems.includes(g2)) {
-      gems.push(g2);
-      if (!streakMap[g2.x]) streakMap[g2.x] = [];
-      streakMap[g2.x].push(g2);
-    }
+    const gems = Array.from(affected);
+    return gems;
+  }
+  private uiHandleBombAndLight(gems: Gem[]) {
+    const streakMap: Record<number, Gem[]> = {};
+    gems.forEach((g) => {
+      if (!streakMap[g.x]) streakMap[g.x] = [];
+      streakMap[g.x].push(g);
+    });
 
     gems.forEach((gem, idx) => {
       const isLast = idx === gems.length - 1;
@@ -260,7 +225,116 @@ export class GameEngine {
     });
 
     this.deselectGem();
+    return;
   }
+  // private handleBombAndGem(g1: Gem, g2: Gem) {
+  //   // Bomb + Gem => clear all gems with same value
+  //   const targetColor = g1.isBomb ? g2.value : g1.value;
+  //   const gems: Gem[] = [];
+  //   const streakMap: Record<number, Gem[]> = {};
+
+  //   for (let y = 0; y < GRID_SIZE; y++) {
+  //     for (let x = 0; x < GRID_SIZE; x++) {
+  //       const gem = this.grid[y][x];
+  //       if (gem.value === targetColor) {
+  //         gems.push(gem);
+  //         if (!streakMap[x]) streakMap[x] = [];
+  //         streakMap[x].push(gem);
+  //       }
+  //     }
+  //   }
+  //   if (!gems.includes(g1)) {
+  //     gems.push(g1);
+  //     if (!streakMap[g1.x]) streakMap[g1.x] = [];
+  //     streakMap[g1.x].push(g1);
+  //   }
+  //   if (!gems.includes(g2)) {
+  //     gems.push(g2);
+  //     if (!streakMap[g2.x]) streakMap[g2.x] = [];
+  //     streakMap[g2.x].push(g2);
+  //   }
+
+  //   gems.forEach((gem, idx) => {
+  //     const isLast = idx === gems.length - 1;
+  //     gem.destroy(() => {
+  //       if (isLast) {
+  //         this.score.add(gems.length, this.comboReward, 0);
+  //         this.onStreakRemoved(streakMap);
+  //       }
+  //     });
+  //   });
+
+  //   this.deselectGem();
+  // }
+  private handleBombAndGem(g1: Gem, g2: Gem) {
+    // Bomb + Gem => clear all gems with same value
+    const targetColor = g1.isBomb ? g2.value : g1.value;
+    const gems: Gem[] = [];
+
+    // 1. Duyệt grid -> collect gems cùng màu
+    for (let y = 0; y < GRID_SIZE; y++) {
+      for (let x = 0; x < GRID_SIZE; x++) {
+        const gem = this.grid[y][x];
+        if (gem.value === targetColor) {
+          gems.push(gem);
+        }
+      }
+    }
+
+    // 2. Đảm bảo g1 và g2 luôn có trong list
+    if (!gems.includes(g1)) {
+      gems.push(g1);
+    }
+    if (!gems.includes(g2)) {
+      gems.push(g2);
+    }
+    return gems;
+  }
+  private uiHandleBombAndGem(gems: Gem[]) {
+    // Bomb + Gem => clear all gems with same value
+
+    const streakMap: Record<number, Gem[]> = {};
+    for (const gem of gems) {
+      if (!streakMap[gem.x]) streakMap[gem.x] = [];
+      streakMap[gem.x].push(gem);
+    }
+
+    // 4. Destroy gems và callback khi xong
+    gems.forEach((gem, idx) => {
+      const isLast = idx === gems.length - 1;
+      gem.destroy(() => {
+        if (isLast) {
+          this.score.add(gems.length, this.comboReward, 0);
+          this.onStreakRemoved(streakMap);
+        }
+      });
+    });
+
+    this.deselectGem();
+  }
+  private uiHandleRemoveGem(gems: Gem[]) {
+    // Bomb + Gem => clear all gems with same value
+
+    const streakMap: Record<number, Gem[]> = {};
+    for (const gem of gems) {
+      if (!streakMap[gem.x]) streakMap[gem.x] = [];
+      streakMap[gem.x].push(gem);
+    }
+
+    // 4. Destroy gems và callback khi xong
+    gems.forEach((gem, idx) => {
+      const isLast = idx === gems.length - 1;
+      gem.destroy(() => {
+        if (isLast) {
+          this.score.add(gems.length, this.comboReward, 0);
+          this.onStreakRemoved(streakMap);
+        }
+      });
+    });
+
+    this.deselectGem();
+  }
+  //be
   private handleBombAndBomb(g1: Gem, g2: Gem) {
     this.swapGems(g1, g2);
     const all: Gem[] = [];
@@ -270,20 +344,8 @@ export class GameEngine {
         all.push(this.grid[y][x]);
       }
     }
-
-    all.forEach((gem, idx) => {
-      const isLast = idx === all.length - 1;
-      gem.destroy(() => {
-        if (isLast) {
-          this.score.add(all.length, this.comboReward, 0);
-          this.createGrid(false);
-        }
-      });
-    });
-
-    this.deselectGem();
+    return all;
   }
-
   private handleLightGemAndLightGem(g1: Gem, g2: Gem) {
     this.swapGems(g1, g2);
 
@@ -302,30 +364,15 @@ export class GameEngine {
         targets.push(this.grid[y][col]);
       }
     }
-    const streakMap: Record<number, Gem[]> = {};
-    for (const g of targets) {
-      if (!streakMap[g.x]) streakMap[g.x] = [];
-      streakMap[g.x].push(g);
-    }
-    targets.forEach((gem, idx) => {
-      const isLast = idx === targets.length - 1;
-      gem.destroy(() => {
-        if (isLast) {
-          this.score.add(targets.length, this.comboReward, 0);
-          this.onStreakRemoved(streakMap);
-        }
-      });
-    });
-
-    this.deselectGem();
+    return targets;
   }
-
+  //ui
   selectGem(gem: Gem) {
     this.deselectGem();
     this.selectedGem = gem;
     gem.element.classList.add('selected');
   }
-
+  //ui
   deselectGem() {
     if (this.selectedGem) {
       this.selectedGem.element.classList.remove('selected');
@@ -763,6 +810,7 @@ export class GameEngine {
     return result;
   }
 
+  //ui
   uiTriggerSquareFromTopLeft(x: number, y: number, size: number) {
     for (let row = 0; row < this.grid.length; row++) {
       for (let col = 0; col < this.grid[row].length; col++) {
