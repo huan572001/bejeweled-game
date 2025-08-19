@@ -45,7 +45,7 @@ export class GameEngine {
       this.uiTriggerSquareFromTopLeft(gem.x, gem.y, 4);
     }
   }
-  createGrid(useTestMap = true) {
+  createGrid(useTestMap = false) {
     const gridEl = get('#grid') as HTMLElement;
     this.grid = [];
 
