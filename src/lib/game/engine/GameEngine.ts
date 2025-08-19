@@ -27,7 +27,7 @@ export class GameEngine {
   constructor() {
     this.score = new Score(INITIAL_SCORE_GOAL);
     this.timer = new Timer(
-      0.2,
+      1,
       () => this.onTick(),
       () => this.onTimeUp()
     );
