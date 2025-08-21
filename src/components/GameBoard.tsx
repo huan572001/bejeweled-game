@@ -68,18 +68,18 @@ export default function GameBoard() {
       <div>Score next level: {engineRef.current?.score.goal || 0}</div>
       <div id="grid" className="relative grid w-full grid-cols-8 gap-1 border border-gray-400 sm:w-[530px]" />
       <div className="flex gap-2">
-        <button onClick={handleRestart} className="rounded bg-blue-600 px-4 py-2 text-white">
+        {/* <button onClick={handleRestart} className="rounded bg-blue-600 px-4 py-2 text-white">
           🔁 Restart
-        </button>
-        <button onClick={handleShuffle} className="rounded bg-blue-600 px-4 py-2 text-white">
+        </button> */}
+        {/* <button onClick={handleShuffle} className="rounded bg-blue-600 px-4 py-2 text-white">
           🔁 shuffle
-        </button>
+        </button> */}
         <button onClick={handlePause} className="rounded bg-yellow-500 px-4 py-2 text-black">
           {paused ? '▶️ Resume' : '⏸ Pause'}
         </button>
-        <button onClick={checkGrid} className="rounded bg-green-600 px-4 py-2 text-white">
+        {/* <button onClick={checkGrid} className="rounded bg-green-600 px-4 py-2 text-white">
           💡 Hint
-        </button>
+        </button> */}
         <button onClick={destroyRandomGems} className="rounded bg-green-600 px-4 py-2 text-white">
           💡 destroyRandomGems
         </button>

@@ -24,6 +24,7 @@ export class GameEngine {
   paused = false;
   hoveredGem: Gem | null = null;
   activeDestroy: boolean = false;
+  disableGame: boolean = false;
   private nextRowIndex: number[] = Array(8).fill(8);
   private fullBoard: Gem[][] = [];
   gameServer: GameEngineServer;
@@ -45,13 +46,6 @@ export class GameEngine {
     this.bindEvents();
   }
 
-  //ui
-  setHoveredGem(gem: Gem) {
-    if (this.activeDestroy) {
-      this.hoveredGem = gem;
-      this.uiTriggerSquareFromTopLeft(gem.x, gem.y, 4);
-    }
-  }
   //ui
   createGrid() {
     const gridEl = get('#grid') as HTMLElement;
@@ -90,9 +84,12 @@ export class GameEngine {
     gridEl.addEventListener('click', (e: any) => {
       const target = e.target as HTMLElement;
       const gem = this.findGemByElement(target);
-      if (gem) {
+      if (gem && !this.disableGame && !this.paused) {
         if (this.activeDestroy) {
-          this.triggerSquareFromTopLeft(gem, 4);
+          const x = gem.x > 4 ? 4 : gem.x;
+          const y = gem.y > 4 ? 4 : gem.y;
+          const gemsToDestroy = this.grid[y][x];
+          this.triggerSquareFromTopLeft(gemsToDestroy, 4);
           //ui
           this.setActiveDestroy(false);
         } else {
@@ -103,7 +100,12 @@ export class GameEngine {
     gridEl.addEventListener('mouseover', (e: any) => {
       const target = e.target as HTMLElement;
       const gem = this.findGemByElement(target);
-      if (gem && this.activeDestroy) this.uiTriggerSquareFromTopLeft(gem.x, gem.y, 4);
+
+      if (gem && this.activeDestroy) {
+        const x = gem.x > 4 ? 4 : gem.x;
+        const y = gem.y > 4 ? 4 : gem.y;
+        this.uiTriggerSquareFromTopLeft(x, y, 4);
+      }
     });
   }
   setActiveDestroy(value: boolean) {
@@ -124,7 +126,7 @@ export class GameEngine {
       this.selectGem(gem);
       return;
     }
-
+    this.disableGame = true;
     const g1 = this.selectedGem;
     const g2 = gem;
     console.log(g1, g2, 'FE');
@@ -659,7 +661,6 @@ export class GameEngine {
     gridEl.innerHTML = '';
     this.grid = [];
     this.selectedGem = null;
-    this.createGrid();
   }
   destroyRandomGems() {
     const count = 6;
@@ -711,7 +712,7 @@ export class GameEngine {
 
     if (!found) {
       this.score.pointComboEnd = this.score.current;
-      console.log(this.score.pointComboStart, this.score.pointComboEnd, 'FE');
+      this.disableGame = false;
       if (this.score.pointComboEnd - this.score.pointComboStart >= POINTS_COMBO) {
         this.score.combo++;
         const gridEl = get('#grid') as HTMLElement;

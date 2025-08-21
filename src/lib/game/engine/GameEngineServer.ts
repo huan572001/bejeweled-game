@@ -43,7 +43,8 @@ export class GameEngineServer {
     }
   }
   fetchFullBoard() {
-    const board = data as Gem[][];
+    // const board = data as Gem[][];
+    const board = this.generateBoard(GRID_SIZE);
     this.fullBoard = [];
     for (let y = 0; y < board.length; y++) {
       const row: Gem[] = [];
@@ -60,7 +61,7 @@ export class GameEngineServer {
   generateBoard(size: number) {
     const board: Gem[][] = [];
 
-    for (let y = 0; y < 100; y++) {
+    for (let y = 0; y < 1000; y++) {
       board[y] = [];
       for (let x = 0; x < size; x++) {
         let value: number;
