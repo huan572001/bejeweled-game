@@ -6,6 +6,9 @@ export class Score {
   current: number;
   goal: number;
   level: number;
+  combo = 0;
+  pointComboStart = 0;
+  pointComboEnd = 0;
   private yOrigin = 215;
   private yShift = 5;
 
@@ -31,6 +34,7 @@ export class Score {
   nextLevel() {
     if (this.current >= this.goal) {
       this.current = 0;
+      this.combo = 0;
       this.goal = Math.floor(this.goal * 1.5);
       this.level += 1;
       return true; // Đạt được level mới

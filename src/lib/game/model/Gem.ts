@@ -10,8 +10,10 @@ export class Gem {
   isLightGem: boolean = false;
   setBomb() {
     this.isBomb = true;
-    this.element.classList.add('bomb');
-    this.element.style.backgroundImage = `url("/images/sprites/bomb.png")`;
+    this.element?.classList?.add('bomb');
+    if (this.element && this.element.style) {
+      this.element.style.backgroundImage = `url("/images/sprites/bomb.png")`;
+    }
 
     // Đưa lên đầu stack hiển thị (nếu đã nằm trong DOM)
     const grid = document.getElementById('grid');
@@ -42,13 +44,6 @@ export class Gem {
    */
   pop(container: HTMLElement) {
     container.appendChild(this.element);
-  }
-
-  /**
-   * So sánh với 1 gem khác (vị trí & loại giống nhau)
-   */
-  equals(other: Gem): boolean {
-    return other && other.value === this.value && other !== this && !other.falling;
   }
 
   /**
@@ -99,9 +94,3 @@ export class Gem {
     }
   }
 }
-
-export type GemServer = {
-  value: number;
-  isBomb: boolean;
-  isLightGem: boolean;
-};
