@@ -1,8 +1,9 @@
-import { GRID_SIZE, GEM_TYPES, INITIAL_SCORE_GOAL } from './GameConfig';
-import { Gem, GemServer } from '../model/Gem';
+import { GRID_SIZE, GEM_TYPES, INITIAL_SCORE_GOAL, POINTS_COMBO } from './GameConfig';
+import { Gem } from '../model/Gem';
 import { Score } from './Score';
 import { Timer } from './Timer';
 import { get } from '../utils/dom';
+import { GameEngineServer } from './GameEngineServer';
 const TEST_MAP: number[][] = [
   [1, 2, 3, 4, 5, 6, 7, 1],
   [1, 2, 3, 4, 5, 6, 7, 2],
@@ -19,12 +20,15 @@ export class GameEngine {
   score: Score;
   timer: Timer;
   comboReward: number = 100;
-  combo = 0;
+
   paused = false;
   hoveredGem: Gem | null = null;
   activeDestroy: boolean = false;
-
+  private nextRowIndex: number[] = Array(8).fill(8);
+  private fullBoard: Gem[][] = [];
+  gameServer: GameEngineServer;
   constructor() {
+    this.gameServer = new GameEngineServer();
     this.score = new Score(INITIAL_SCORE_GOAL);
     this.timer = new Timer(
       1,
@@ -34,7 +38,8 @@ export class GameEngine {
   }
 
   init() {
-    this.createGrid(true);
+    this.gameServer.init();
+    this.createGrid();
     // this.score.reset();
     this.timer.start();
     this.bindEvents();
@@ -48,20 +53,16 @@ export class GameEngine {
     }
   }
   //ui
-  createGrid(useTestMap = false) {
+  createGrid() {
     const gridEl = get('#grid') as HTMLElement;
     this.grid = [];
-    const board = this.generateBoard(GRID_SIZE);
+
+    const board = this.fetchFullBoard();
     for (let y = 0; y < GRID_SIZE; y++) {
       const row: Gem[] = [];
       for (let x = 0; x < GRID_SIZE; x++) {
         let gem: Gem;
-        if (useTestMap) {
-          // Lấy loại từ map test
-          gem = new Gem(x, y, TEST_MAP[y][x]);
-        } else {
-          gem = new Gem(x, y, board[y][x].value, board[y][x].isLightGem, board[y][x].isBomb);
-        }
+        gem = board[y][x];
         gem.pop(gridEl);
         row.push(gem);
       }
@@ -69,24 +70,19 @@ export class GameEngine {
     }
   }
 
-  //BE
-  generateBoard(size: number) {
-    const board: GemServer[][] = [];
-
-    for (let y = 0; y < size; y++) {
-      board[y] = [];
-      for (let x = 0; x < size; x++) {
-        let value: number;
-        do {
-          value = Math.floor(Math.random() * 5) + 1;
-        } while (
-          (x >= 2 && board[y][x - 1].value === value && board[y][x - 2].value === value) ||
-          (y >= 2 && board[y - 1][x].value === value && board[y - 2][x].value === value)
-        );
-        board[y][x] = { value, isBomb: false, isLightGem: false };
+  fetchFullBoard() {
+    const board = this.gameServer.fullBoard;
+    this.fullBoard = [];
+    for (let y = 0; y < board.length; y++) {
+      const row: Gem[] = [];
+      for (let x = 0; x < board[y].length; x++) {
+        let gem: Gem;
+        gem = new Gem(board[y][x].x, board[y][x].y, board[y][x].value, board[y][x].isLightGem, board[y][x].isBomb);
+        row.push(gem);
       }
+      this.fullBoard.push(row);
     }
-    return board;
+    return this.fullBoard;
   }
 
   bindEvents() {
@@ -113,7 +109,7 @@ export class GameEngine {
   setActiveDestroy(value: boolean) {
     this.activeDestroy = value;
   }
-  handleGemClick(gem: Gem) {
+  async handleGemClick(gem: Gem) {
     if (!this.selectedGem) {
       this.selectGem(gem);
       return;
@@ -131,6 +127,12 @@ export class GameEngine {
 
     const g1 = this.selectedGem;
     const g2 = gem;
+    console.log(g1, g2, 'FE');
+
+    await this.gameServer.handleGemClick(g1, g2); // api
+    this.score.pointComboStart = this.score.current;
+    // ⏳ chờ 2s
+    // await new Promise((resolve) => setTimeout(resolve, 3000));
 
     // Bomb + Bomb => clear board
     if (g1.isBomb && g2.isBomb) {
@@ -173,7 +175,6 @@ export class GameEngine {
     }
 
     if (Object.keys(s1).length > 0 || Object.keys(s2).length > 0) {
-      this.combo = 1;
       const streakToRemove = Object.keys(s1).length > 0 ? s1 : s2;
       this.removeStreak(streakToRemove);
     } else {
@@ -182,6 +183,36 @@ export class GameEngine {
 
     this.deselectGem();
   }
+  logGrid() {
+    for (let y = 0; y < GRID_SIZE; y++) {
+      let row = '';
+      for (let x = 0; x < GRID_SIZE; x++) {
+        const gem = this.grid[y][x];
+        row += gem ? gem.value.toString() : '0';
+        row += ' ';
+      }
+      console.log(row);
+    }
+    console.log('==============================FE================================');
+  }
+
+  checkGrid() {
+    let check = 0;
+    for (let y = 0; y < GRID_SIZE; y++) {
+      let row = '';
+      for (let x = 0; x < GRID_SIZE; x++) {
+        const gem = this.grid[y][x];
+        const gem2 = this.gameServer.grid[y][x];
+        row = row + ':' + gem.value + '/' + gem2.value;
+        if (gem.value === gem2.value) {
+          check++;
+        }
+      }
+      console.log(row);
+    }
+    return check;
+  }
+
   private handleBombAndLight(g1: Gem, g2: Gem) {
     // Bomb + Light Gem => clear 3 rows & 3 cols
     this.swapGems(g1, g2);
@@ -207,65 +238,7 @@ export class GameEngine {
     const gems = Array.from(affected);
     return gems;
   }
-  private uiHandleBombAndLight(gems: Gem[]) {
-    const streakMap: Record<number, Gem[]> = {};
-    gems.forEach((g) => {
-      if (!streakMap[g.x]) streakMap[g.x] = [];
-      streakMap[g.x].push(g);
-    });
 
-    gems.forEach((gem, idx) => {
-      const isLast = idx === gems.length - 1;
-      gem.destroy(() => {
-        if (isLast) {
-          this.score.add(gems.length, this.comboReward, 0);
-          this.onStreakRemoved(streakMap);
-        }
-      });
-    });
-
-    this.deselectGem();
-    return;
-  }
-  // private handleBombAndGem(g1: Gem, g2: Gem) {
-  //   // Bomb + Gem => clear all gems with same value
-  //   const targetColor = g1.isBomb ? g2.value : g1.value;
-  //   const gems: Gem[] = [];
-  //   const streakMap: Record<number, Gem[]> = {};
-
-  //   for (let y = 0; y < GRID_SIZE; y++) {
-  //     for (let x = 0; x < GRID_SIZE; x++) {
-  //       const gem = this.grid[y][x];
-  //       if (gem.value === targetColor) {
-  //         gems.push(gem);
-  //         if (!streakMap[x]) streakMap[x] = [];
-  //         streakMap[x].push(gem);
-  //       }
-  //     }
-  //   }
-  //   if (!gems.includes(g1)) {
-  //     gems.push(g1);
-  //     if (!streakMap[g1.x]) streakMap[g1.x] = [];
-  //     streakMap[g1.x].push(g1);
-  //   }
-  //   if (!gems.includes(g2)) {
-  //     gems.push(g2);
-  //     if (!streakMap[g2.x]) streakMap[g2.x] = [];
-  //     streakMap[g2.x].push(g2);
-  //   }
-
-  //   gems.forEach((gem, idx) => {
-  //     const isLast = idx === gems.length - 1;
-  //     gem.destroy(() => {
-  //       if (isLast) {
-  //         this.score.add(gems.length, this.comboReward, 0);
-  //         this.onStreakRemoved(streakMap);
-  //       }
-  //     });
-  //   });
-
-  //   this.deselectGem();
-  // }
   private handleBombAndGem(g1: Gem, g2: Gem) {
     // Bomb + Gem => clear all gems with same value
     const targetColor = g1.isBomb ? g2.value : g1.value;
@@ -290,28 +263,7 @@ export class GameEngine {
     }
     return gems;
   }
-  private uiHandleBombAndGem(gems: Gem[]) {
-    // Bomb + Gem => clear all gems with same value
 
-    const streakMap: Record<number, Gem[]> = {};
-    for (const gem of gems) {
-      if (!streakMap[gem.x]) streakMap[gem.x] = [];
-      streakMap[gem.x].push(gem);
-    }
-
-    // 4. Destroy gems và callback khi xong
-    gems.forEach((gem, idx) => {
-      const isLast = idx === gems.length - 1;
-      gem.destroy(() => {
-        if (isLast) {
-          this.score.add(gems.length, this.comboReward, 0);
-          this.onStreakRemoved(streakMap);
-        }
-      });
-    });
-
-    this.deselectGem();
-  }
   private uiHandleRemoveGem(gems: Gem[]) {
     // Bomb + Gem => clear all gems with same value
 
@@ -507,9 +459,8 @@ export class GameEngine {
     const gridEl = document.getElementById('grid');
     this.grid[y][x].element.remove();
 
-    const bombGem = new Gem(x, y, Math.floor(Math.random() * GEM_TYPES));
+    const bombGem = new Gem(x, y, -1);
     bombGem.isBomb = true;
-    bombGem.value = -1; // Đặt giá trị đặc biệt cho bomb tránh lỗi đã là boom vẫn ghép đc
     bombGem.element.classList.add('bomb');
     bombGem.element.style.backgroundImage = `url("/images/sprites/bomb.png")`;
 
@@ -638,26 +589,24 @@ export class GameEngine {
     }
 
     // Tạo gem mới ở trên cùng
+    const newGemCheck: number[] = [];
     for (let y = 0; y < GRID_SIZE - columnGems.length; y++) {
-      const newGem = new Gem(col, y, Math.floor(Math.random() * GEM_TYPES));
+      const nextY = this.nextRowIndex[col]; // lấy index tiếp theo từ ma trận gốc
+      const value = this.fullBoard[nextY][col].value;
+
+      const newGem = new Gem(col, y, value);
       newGem.pop(gridEl);
       this.grid[y][col] = newGem;
-    }
-  }
+      newGemCheck.push(newGem.value); // lưu giá trị mới để kiểm tra sau
+      // tăng con trỏ lên để lần sau lấy gem tiếp theo
 
-  generateGems() {
-    const gridEl = document.getElementById('grid');
-    if (!gridEl) return;
-    for (let x = 0; x < GRID_SIZE; x++) {
-      for (let y = 0; y < GRID_SIZE; y++) {
-        const gem = this.grid[y][x];
-        if (!gem) {
-          const newGem = new Gem(x, y, Math.floor(Math.random() * GEM_TYPES));
-          this.grid[y][x] = newGem;
-          newGem.pop(gridEl);
-        }
-      }
+      this.nextRowIndex[col]++;
     }
+    console.log(
+      'nextRowIndex FE',
+      newGemCheck,
+      destroyedGems.map((g) => g.value)
+    );
   }
 
   onTick() {
@@ -696,10 +645,10 @@ export class GameEngine {
   restart() {
     const gridEl = get('#grid') as HTMLElement;
     gridEl.innerHTML = '';
-    this.combo = 0;
+    this.score.combo = 0;
     this.grid = [];
     this.selectedGem = null;
-    this.createGrid(false);
+    this.createGrid();
     this.score.reset(INITIAL_SCORE_GOAL);
     this.timer.reset();
     this.timer.start();
@@ -708,10 +657,9 @@ export class GameEngine {
   shuffle() {
     const gridEl = get('#grid') as HTMLElement;
     gridEl.innerHTML = '';
-    this.combo = 0;
     this.grid = [];
     this.selectedGem = null;
-    this.createGrid(false);
+    this.createGrid();
   }
   destroyRandomGems() {
     const count = 6;
@@ -747,14 +695,12 @@ export class GameEngine {
 
   checkAllStreaks() {
     let found = false;
-
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
         const gem = this.grid[y][x];
         if (gem) {
           const streak = this.getStreakFrom(gem);
           if (Object.keys(streak).length > 0) {
-            this.combo++;
             this.removeStreak(streak);
             found = true;
             return; // đợi removeStreak xong rồi gọi lại sau
@@ -764,7 +710,19 @@ export class GameEngine {
     }
 
     if (!found) {
-      this.combo = 0; // kết thúc combo
+      this.score.pointComboEnd = this.score.current;
+      console.log(this.score.pointComboStart, this.score.pointComboEnd, 'FE');
+      if (this.score.pointComboEnd - this.score.pointComboStart >= POINTS_COMBO) {
+        this.score.combo++;
+        const gridEl = get('#grid') as HTMLElement;
+        gridEl.before(this.createComboElement());
+        if (this.score.combo > 5) {
+          setTimeout(() => {
+            gridEl.before(this.createComboElement('Nhận được Rương'));
+            this.score.combo = 0;
+          }, 200);
+        }
+      }
     }
   }
 
@@ -819,5 +777,23 @@ export class GameEngine {
         this.grid[row][col].highlight(inSquare);
       }
     }
+  }
+
+  // Creates a combo element to display on the UI
+  createComboElement(title?: string): HTMLElement {
+    const comboEl = document.createElement('div');
+    comboEl.className = 'combo-indicator';
+    comboEl.textContent = title ? title : `Combo x${this.score.combo}!`;
+    comboEl.style.fontSize = '2em';
+    comboEl.style.color = '#FFD700';
+    comboEl.style.textAlign = 'center';
+    comboEl.style.margin = '10px 0';
+    comboEl.style.fontWeight = 'bold';
+    comboEl.style.animation = 'fadeOut 2s forwards';
+    // Optional: Remove after animation
+    setTimeout(() => {
+      comboEl.remove();
+    }, 2000);
+    return comboEl;
   }
 }

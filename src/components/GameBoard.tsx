@@ -58,6 +58,10 @@ export default function GameBoard() {
   const handleShuffle = () => {
     engineRef.current?.shuffle();
   };
+
+  const checkGrid = () => {
+    console.log(engineRef.current?.checkGrid(), 'checkGird');
+  };
   return (
     <div className="flex flex-col items-center gap-4">
       <div>Level: {engineRef.current?.score.level || 1}</div>
@@ -73,7 +77,7 @@ export default function GameBoard() {
         <button onClick={handlePause} className="rounded bg-yellow-500 px-4 py-2 text-black">
           {paused ? '▶️ Resume' : '⏸ Pause'}
         </button>
-        <button onClick={handleHint} className="rounded bg-green-600 px-4 py-2 text-white">
+        <button onClick={checkGrid} className="rounded bg-green-600 px-4 py-2 text-white">
           💡 Hint
         </button>
         <button onClick={destroyRandomGems} className="rounded bg-green-600 px-4 py-2 text-white">
