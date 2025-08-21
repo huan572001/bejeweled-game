@@ -126,12 +126,11 @@ export class GameEngine {
       this.selectGem(gem);
       return;
     }
-    this.disableGame = true;
+
     const g1 = this.selectedGem;
     const g2 = gem;
-    console.log(g1, g2, 'FE');
 
-    await this.gameServer.handleGemClick(g1, g2); // api
+    // await this.gameServer.handleGemClick(g1, g2); // api
     this.score.pointComboStart = this.score.current;
     // ⏳ chờ 2s
     // await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -163,7 +162,6 @@ export class GameEngine {
     }
 
     this.swapGems(g1, g2);
-
     const s1 = this.getStreakFrom(g1);
     const s2 = this.getStreakFrom(g2);
 
@@ -274,7 +272,6 @@ export class GameEngine {
       if (!streakMap[gem.x]) streakMap[gem.x] = [];
       streakMap[gem.x].push(gem);
     }
-
     // 4. Destroy gems và callback khi xong
     gems.forEach((gem, idx) => {
       const isLast = idx === gems.length - 1;
@@ -549,7 +546,7 @@ export class GameEngine {
   onStreakRemoved(streak: Record<number, Gem[]>) {
     const gridEl = get('#grid') as HTMLElement;
     const columns = Object.keys(streak).map(Number);
-
+    this.disableGame = true;
     columns.forEach((col, index) => {
       setTimeout(() => {
         this.processColumnFall(col, streak[col], gridEl);
@@ -604,11 +601,6 @@ export class GameEngine {
 
       this.nextRowIndex[col]++;
     }
-    console.log(
-      'nextRowIndex FE',
-      newGemCheck,
-      destroyedGems.map((g) => g.value)
-    );
   }
 
   onTick() {
@@ -712,18 +704,21 @@ export class GameEngine {
 
     if (!found) {
       this.score.pointComboEnd = this.score.current;
-      this.disableGame = false;
-      if (this.score.pointComboEnd - this.score.pointComboStart >= POINTS_COMBO) {
+      //this.disableGame === true là user thự hiện thao tác và đang chạy tính điểm
+      if (this.score.pointComboEnd - this.score.pointComboStart >= POINTS_COMBO && this.disableGame === true) {
         this.score.combo++;
         const gridEl = get('#grid') as HTMLElement;
+        console.log(this.score.pointComboStart, this.score.pointComboEnd, 'FE');
+
         gridEl.before(this.createComboElement());
-        if (this.score.combo > 5) {
+        if (this.score.combo >= 5) {
           setTimeout(() => {
             gridEl.before(this.createComboElement('Nhận được Rương'));
             this.score.combo = 0;
           }, 200);
         }
       }
+      this.disableGame = false;
     }
   }
 
